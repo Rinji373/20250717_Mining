@@ -18,8 +18,8 @@ library(lubridate)
 drive <- drive_find(pattern="*_epsg4326_scale500m_beech.tif")
 
 # 鉱山ポリゴンの読み込み（SHAPE形式）
-#polygon <- st_read(dsn="F:/2024_hirora_Toyota6/2023_hirota/Polygon/Polygon_Bare_20250715/20250715_画像ダウンロード/20240709_all_overlapping_polygons_unique.shp")
-polygon <- st_read(dsn="C:/Users/casakuma-lab-04-std/Downloads/test/test.shp")
+polygon <- st_read(dsn="F:/2024_hirora_Toyota6/2023_hirota/Polygon/Polygon_Bare_20250715/20250715_画像ダウンロード/20240709_all_overlapping_polygons_unique.shp")
+#polygon <- st_read(dsn="C:/Users/casakuma-lab-04-std/Downloads/test/test.shp")
 
 ####################################################################
 #タスクを終了させる
