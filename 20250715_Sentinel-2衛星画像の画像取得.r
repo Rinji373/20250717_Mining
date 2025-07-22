@@ -52,12 +52,12 @@ for(i in 1:nrow(polygon)){
   
   polygon1_UTM <- st_transform(polygon1, crs = crs_UTM)
   
-  # AOIの作成（中心座標から±20000mの領域）
+  # AOIの作成（中心座標から±10000mの領域）
   centroid <- st_centroid(polygon1_UTM)
   coords <- st_coordinates(centroid)
   x_centroid <- coords[1]; y_centroid <- coords[2]
-  xmin1 <- x_centroid - 20000; xmax1 <- x_centroid + 20000
-  ymin1 <- y_centroid - 20000; ymax1 <- y_centroid + 20000
+  xmin1 <- x_centroid - 10000; xmax1 <- x_centroid + 10000
+  ymin1 <- y_centroid - 10000; ymax1 <- y_centroid + 10000
   AOI <- st_polygon(list(cbind(
     c(xmin1, xmax1, xmax1, xmin1, xmin1),
     c(ymin1, ymin1, ymax1, ymax1, ymin1)
@@ -66,13 +66,14 @@ for(i in 1:nrow(polygon)){
   AOI <- st_transform(AOI, crs = st_crs(polygon))  # AOIをWGS84に再変換
   region <- ee$Geometry$Rectangle(st_bbox(AOI))
   start_date <- "2021-01-01"
-  end_date <- "2021-01-31"
+  end_date <- "2021-12-31"
   # end_date <- "2021-12-31"
 
-  ### 画像検索（指定期間・領域・必要なバンド、雲被覆率20%未満）
+  ### 画像検索（指定期間・領域・必要なバンド、雲被覆率10%未満）
   LC08 <- ee$ImageCollection("COPERNICUS/S2_SR")$
     filterDate(start_date, end_date)$
     filterBounds(region)$
+    filter(ee$Filter$lt('CLOUDY_PIXEL_PERCENTAGE', 10))$
     select(c('B1','B2','B3','B4','B5','B6','B7','B8','B8A','B9','B11','B12','SCL'))
   
   n <- LC08$size()$getInfo()
