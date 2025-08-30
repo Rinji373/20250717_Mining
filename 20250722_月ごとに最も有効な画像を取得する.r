@@ -66,23 +66,21 @@ for(i in 1:nrow(polygon)){
   AOI <- st_transform(AOI, crs = st_crs(polygon))  # AOIをWGS84に再変換
   region <- ee$Geometry$Rectangle(st_bbox(AOI))
   for(month in 1:12){
-    # 月ごとの開始日・終了日を設定
     start_date <- sprintf("2021-%02d-01", month)
-    end_date <- if(month == 2){
-      "2021-02-28"
-    } else if(month %in% c(4,6,9,11)){
-      sprintf("2021-%02d-30", month)
-    } else {
-      sprintf("2021-%02d-31", month)
+    # lubridateで月末日を取得
+    end_date <- sprintf("2021-%02d-%02d", month, days_in_month(ymd(start_date)))
+    # NAチェック
+    if(is.na(start_date) || is.na(end_date)){
+      print(paste("Invalid date for month", month, "skipping..."))
+      next
     }
-    
     print(paste("Processing month:", start_date, "to", end_date))
     
-    ### 1. Sentinel-2衛星画像を検索（雲被覆率20%未満）
+    ### 1. Sentinel-2衛星画像を検索（雲被覆率10%未満）
     LC08 <- ee$ImageCollection("COPERNICUS/S2_SR")$
       filterDate(start_date, end_date)$
       filterBounds(region)$
-      filter(ee$Filter$lte("CLOUDY_PIXEL_PERCENTAGE", 20))$  # 雲被覆率20%未満
+      filter(ee$Filter$lte("CLOUDY_PIXEL_PERCENTAGE", 10))$  # 雲被覆率10%未満
       select(c('B1','B2','B3','B4','B5','B6','B7','B8','B8A','B9','B11','B12','SCL'))
     
     n <- LC08$size()$getInfo()
