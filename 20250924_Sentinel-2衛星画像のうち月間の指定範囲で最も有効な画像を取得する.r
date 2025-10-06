@@ -17,7 +17,7 @@ library(lubridate)
 # GoogleDriveの編集権限をチェックする
 drive <- drive_find(pattern="*_epsg4326_scale500m_beech.tif")
 # 出力先フォルダ名（ループ外で指定）
-folder_name <- "Sentinel-2_Monthly_Best_Image"
+folder_name <- "Sentinel-2_Monthly_Best_Image_2021ver"
 
 # 鉱山ポリゴンの読み込み（SHAPE形式）
 polygon <- st_read(dsn="C:/Users/casakuma-lab-04-std/Downloads/Polygon_Bare_20250819_2021ver 1/Polygon_Bare_20250819_2021ver/polygon_bare20250819_2021ver_test.shp")
@@ -125,9 +125,9 @@ for(i in 1:nrow(polygon)){
     # すべてのバンドを UInt16 型に変換
     best_unmasked_image <- best_unmasked_image$toUint16()
 
-    # すべてのバンドを最近傍補間（nearest）で 10m にリサンプリング / 再投影
-    # 基準に B2（10mバンド）の投影を使用して 10m スケールに統一する
-    best_unmasked_image <- best_unmasked_image$resample('nearest')$reproject(
+    # すべてのバンドを 10m にリサンプリング / 再投影
+    # デフォルトでは最近傍補間（nearest）:https://developers.google.com/earth-engine/guides/resample
+    best_unmasked_image <- best_unmasked_image$reproject(
       crs = best_unmasked_image$select('B2')$projection(),
       scale = 10
     )
