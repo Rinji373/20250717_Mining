@@ -16,9 +16,11 @@ library(lubridate)
 
 # GoogleDriveの編集権限をチェックする
 drive <- drive_find(pattern="*_epsg4326_scale500m_beech.tif")
+# 出力先フォルダ名（ループ外で指定）
+folder_name <- "Sentinel-2_Monthly_Best_Image"
 
 # 鉱山ポリゴンの読み込み（SHAPE形式）
-polygon <- st_read(dsn="C:/Users/casakuma-lab-04-std/Downloads/Polygon_Bare_20250819_2021ver 1/Polygon_Bare_20250819_2021ver/polygon_bare20250819_2021ver_4.shp")
+polygon <- st_read(dsn="C:/Users/casakuma-lab-04-std/Downloads/Polygon_Bare_20250819_2021ver 1/Polygon_Bare_20250819_2021ver/polygon_bare20250819_2021ver_test.shp")
 #polygon <- st_read(dsn="C:/Users/casakuma-lab-04-std/Downloads/test.shp")
 
 ####################################################################
@@ -38,6 +40,9 @@ if (length(tasks) > 0) {
 }
 
 #################################################################################
+# 年・月ごとに最良画像を取得
+target_year <- 2021  # 取得したい年を指定（必要に応じて変更）
+
 #最良画像の選択
 for(i in 1:nrow(polygon)){
   # i番目の鉱山ポリゴンを抽出し、AOIを設定
@@ -66,8 +71,7 @@ for(i in 1:nrow(polygon)){
   AOI <- st_sfc(AOI, crs = crs_UTM)
   AOI <- st_transform(AOI, crs = st_crs(polygon))  # AOIをWGS84に再変換
   region <- ee$Geometry$Rectangle(st_bbox(AOI))
-  # 年・月ごとに最良画像を取得
-  target_year <- 2021  # 取得したい年を指定（必要に応じて変更）
+  
   for (month in 1:12) {
     start_date <- sprintf("%04d-%02d-01", target_year, month)
     end_date <- as.character(
@@ -84,7 +88,7 @@ for(i in 1:nrow(polygon)){
       filterDate(start_date, end_date)$
       filterBounds(region)$
       filter(ee$Filter$lte("CLOUDY_PIXEL_PERCENTAGE", 10))$
-      select(c('B2','B3','B4','SCL'))
+      select(c('B1','B2','B3','B4','B5','B6','B7','B8','B8A','B9','B11','B12','SCL'))
 
     n <- LC08$size()$getInfo()
     if(n == 0){
@@ -121,6 +125,13 @@ for(i in 1:nrow(polygon)){
     # すべてのバンドを UInt16 型に変換
     best_unmasked_image <- best_unmasked_image$toUint16()
 
+    # すべてのバンドを最近傍補間（nearest）で 10m にリサンプリング / 再投影
+    # 基準に B2（10mバンド）の投影を使用して 10m スケールに統一する
+    best_unmasked_image <- best_unmasked_image$resample('nearest')$reproject(
+      crs = best_unmasked_image$select('B2')$projection(),
+      scale = 10
+    )
+
     filename_best_unmasked <- paste0("Sentinel2_Best_Image_polygon", polygon1$polygon_id, "_", target_year, sprintf("_%02d", month), "-best")
     task_best_unmasked <- ee_image_to_drive(
       image = best_unmasked_image,
@@ -128,7 +139,7 @@ for(i in 1:nrow(polygon)){
       fileFormat = "GEO_TIFF",
       fileNamePrefix = filename_best_unmasked,
       timePrefix = FALSE,
-      folder = "Sentinel-2_Monthly_Best_Image",
+  folder = folder_name,
       region = region,
       scale = 10
     )
