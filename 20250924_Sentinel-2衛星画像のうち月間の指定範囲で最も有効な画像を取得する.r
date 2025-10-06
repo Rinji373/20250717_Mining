@@ -18,68 +18,73 @@ library(lubridate)
 drive <- drive_find(pattern="*_epsg4326_scale500m_beech.tif")
 
 # 鉱山ポリゴンの読み込み（SHAPE形式）
-polygon <- st_read(dsn="C:/study/2024/Research/mining/Polygon/Polygon_Bare_20250819_2021ver/Polygon_Bare_20250819_2021ver/polygon_bare20250819_2021ver.shp")
-#polygon <- st_read(dsn="C:/Users/casakuma-lab-04-std/Downloads/test3380-3381.shp")
+polygon <- st_read(dsn="C:/Users/casakuma-lab-04-std/Downloads/Polygon_Bare_20250819_2021ver 1/Polygon_Bare_20250819_2021ver/polygon_bare20250819_2021ver_4.shp")
+#polygon <- st_read(dsn="C:/Users/casakuma-lab-04-std/Downloads/test.shp")
 
-# フォルダー名
-folder_name <- "Landsat-8_Monthly_Best_Image_SR_B6"
-
-# フォルダーの存在確認
-folder <- drive_find(type = "folder", pattern = paste0("^", folder_name, "$"))
-
-if (nrow(folder) == 0) {
-  # フォルダーが存在しなければ作成
-  folder <- drive_mkdir(folder_name)
-  message("フォルダーを新規作成しました: ", folder_name)
+####################################################################
+#タスクを終了させる
+# すべてのタスクを取得する
+tasks <- ee$data$getTaskList()
+# タスクIDを取得してキャンセル
+if (length(tasks) > 0) {
+  for (task in tasks) {
+    if (task$state %in% c("RUNNING", "READY")) {
+      ee$data$cancelTask(task$id)
+      print(paste("Cancelled task:", task$id))
+    }
+  }
 } else {
-  message("既存フォルダーを使用します: ", folder_name)
+  print("No tasks to cancel.")
 }
 
 #################################################################################
 #最良画像の選択
-# 対象年を指定
-target_year <- 2021
-
 for(i in 1:nrow(polygon)){
+  # i番目の鉱山ポリゴンを抽出し、AOIを設定
   polygon1 <- polygon[i, ]
-  polygon_id <- as.character(polygon1$polygon_id)
-  print(paste("Processing polygon:", polygon_id))
-  # 2. 既存ファイルにpolygon_idが含まれていればスキップ
-  if (polygon_id %in% existing_polygon_ids) {
-    print(paste("Already processed polygon_id:", polygon_id))
-    next
-  }
-
-  # AOI作成
+  print(paste("Processing polygon:", polygon1$polygon_id))
+  
+  # 鉱山ポリゴンのXY座標（WGS84）から範囲を算出
   bbox <- st_bbox(polygon1)
   xmin <- bbox$xmin; xmax <- bbox$xmax; ymin <- bbox$ymin; ymax <- bbox$ymax
   x_mean <- (xmax + xmin) / 2; y_mean <- (ymax + ymin) / 2
   UTM_zone <- floor((x_mean + 180) / 6) + 1
   crs_UTM <- paste0("+proj=utm +zone=", UTM_zone, " +datum=WGS84 +units=m +no_defs")
+  
   polygon1_UTM <- st_transform(polygon1, crs = crs_UTM)
-  centroid <- st_centroid(st_geometry(polygon1_UTM))
+  
+  # AOIの作成（中心座標から±20000mの領域）
+  centroid <- st_centroid(polygon1_UTM)
   coords <- st_coordinates(centroid)
   x_centroid <- coords[1]; y_centroid <- coords[2]
-  xmin1 <- x_centroid - 10000; xmax1 <- x_centroid + 10000
-  ymin1 <- y_centroid - 10000; ymax1 <- y_centroid + 10000
+  xmin1 <- x_centroid - 20000; xmax1 <- x_centroid + 20000
+  ymin1 <- y_centroid - 20000; ymax1 <- y_centroid + 20000
   AOI <- st_polygon(list(cbind(
     c(xmin1, xmax1, xmax1, xmin1, xmin1),
     c(ymin1, ymin1, ymax1, ymax1, ymin1)
   )))
   AOI <- st_sfc(AOI, crs = crs_UTM)
-  AOI <- st_transform(AOI, crs = st_crs(polygon))
+  AOI <- st_transform(AOI, crs = st_crs(polygon))  # AOIをWGS84に再変換
   region <- ee$Geometry$Rectangle(st_bbox(AOI))
-
-  for(month in 1:12){
-    start_date <- sprintf("%d-%02d-01", target_year, month)
-    end_date <- as.character(as.Date(start_date) + months(1) - 1)
+  # 年・月ごとに最良画像を取得
+  target_year <- 2021  # 取得したい年を指定（必要に応じて変更）
+  for (month in 1:12) {
+    start_date <- sprintf("%04d-%02d-01", target_year, month)
+    end_date <- as.character(
+      if (month == 12) {
+        sprintf("%04d-12-31", target_year)
+      } else {
+        as.Date(sprintf("%04d-%02d-01", target_year, month + 1)) - 1
+      }
+    )
     print(paste("Processing month:", start_date, "to", end_date))
 
-    LC08 <- ee$ImageCollection("LANDSAT/LC08/C02/T1_L2")$
+    # 1. Sentinel-2衛星画像を検索（雲被覆率10%未満）
+    LC08 <- ee$ImageCollection("COPERNICUS/S2_SR")$
       filterDate(start_date, end_date)$
       filterBounds(region)$
-      filter(ee$Filter$lt('CLOUD_COVER', 10))$
-      select(c('SR_B1','SR_B2','SR_B3','SR_B4','SR_B5','SR_B6','SR_B7','QA_PIXEL'))
+      filter(ee$Filter$lte("CLOUDY_PIXEL_PERCENTAGE", 10))$
+      select(c('B2','B3','B4','SCL'))
 
     n <- LC08$size()$getInfo()
     if(n == 0){
@@ -87,41 +92,43 @@ for(i in 1:nrow(polygon)){
       next
     }
 
-    maskWithQA <- function(img){
-      qa <- img$select("QA_PIXEL")
-      fill <- qa$bitwiseAnd(1L)$eq(0) # Fill（塗りつぶし）の画素もマスク 
-      dilated_cloud <- qa$bitwiseAnd(2L)$eq(0)
-      cirrus <- qa$bitwiseAnd(4L)$eq(0)
-      cloud <- qa$bitwiseAnd(8L)$eq(0)
-      cloud_shadow <- qa$bitwiseAnd(16L)$eq(0)
-      mask <- dilated_cloud$And(cirrus)$And(cloud)$And(cloud_shadow)
+    # 2. SCLバンドを用いたマスク処理
+    maskWithSCL <- function(img){
+      scl <- img$select("SCL")
+      mask <- scl$neq(1)$And(scl$neq(11))$And(scl$neq(3))$And(scl$neq(8))$And(scl$neq(9))$And(scl$neq(10))
       return(img$updateMask(mask))
     }
-    LC08_masked <- LC08$map(maskWithQA)
 
+    LC08_masked <- LC08$map(maskWithSCL)
+
+    # 3. 有効な画像を取得（最も欠損が少ない画像を選択）
     validPixelCount <- function(img){
       validPixels <- img$reduceRegion(
         reducer = ee$Reducer$count(),
         geometry = region,
         scale = 100,
         bestEffort = TRUE
-      )$get("SR_B2")
+      )$get("B2")  # B2バンドで有効画素数を取得
       return(img$set("valid_pixel_count", validPixels))
     }
+
     LC08_with_valid_count <- LC08_masked$map(validPixelCount)
     best_masked_image <- LC08_with_valid_count$sort("valid_pixel_count", FALSE)$first()
 
+    # 4. 選択した画像のマスク処理前の画像を取得
     best_unmasked_image <- LC08$filter(ee$Filter$eq("system:index", best_masked_image$get("system:index")))$first()
-    
+
+    # すべてのバンドを UInt16 型に変換
     best_unmasked_image <- best_unmasked_image$toUint16()
-    filename_best_unmasked <- paste0("Landsat8_Best_Image_polygon", polygon1$polygon_id, "_", target_year, sprintf("%02d", month), "_best")
+
+    filename_best_unmasked <- paste0("Sentinel2_Best_Image_polygon", polygon1$polygon_id, "_", target_year, sprintf("_%02d", month), "-best")
     task_best_unmasked <- ee_image_to_drive(
       image = best_unmasked_image,
       description = filename_best_unmasked,
       fileFormat = "GEO_TIFF",
       fileNamePrefix = filename_best_unmasked,
       timePrefix = FALSE,
-      folder = folder_name,
+      folder = "Sentinel-2_Monthly_Best_Image",
       region = region,
       scale = 10
     )

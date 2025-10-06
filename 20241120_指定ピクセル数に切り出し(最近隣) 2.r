@@ -3,7 +3,7 @@ library(raster)
 library(tools)
 
 
-directory_path <- "F:/2024_hirora_Toyota6/2023_hirota/tool/ArcGis/2024_hirota/20250717/Original_Image/test"
+directory_path <- "F:/2024_hirora_Toyota6/2023_hirota/tool/CNNvsTransformer-main/CNNvsTransformer-main/data/L8_16bit_6band_640pix/All_6band"
 file_list <- list.files(directory_path, pattern = "\\.tif$", full.names = TRUE)
 
 for (file_path in file_list) {
@@ -14,7 +14,7 @@ for (file_path in file_list) {
   file_name <- tools::file_path_sans_ext(basename(file_path))
   
   # 2. 関心領域のサイズを定義
-  half_size <- 1920  # ピクセル単位でROIの半径を定義
+  half_size <- 320  # ピクセル単位でROIの半径を定義
   
   # 3. 中心座標を取得して関心領域を作成
   center_lon <- extent(landsat_image)[1] + (extent(landsat_image)[2] - extent(landsat_image)[1]) / 2
@@ -38,6 +38,6 @@ for (file_path in file_list) {
   }
   
   # 6. 切り抜いた画像を保存
-  output_path <- paste0("F:/2024_hirora_Toyota6/2023_hirota/tool/ArcGis/2024_hirota/20250717/Cropp_Image/test_3840/", file_name, ".tif")
+  output_path <- paste0("F:/2024_hirora_Toyota6/2023_hirota/tool/CNNvsTransformer-main/CNNvsTransformer-main/data/L8_16bit_6band_640pix/All_6band_640pix/", file_name, ".tif")
   writeRaster(cropped_image, output_path, format = "GTiff", datatype = 'INT2U', options = "COMPRESS=LZW", overwrite = TRUE)
 }

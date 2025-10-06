@@ -1,25 +1,32 @@
 # 必要なライブラリをロード
+
 library(raster)
 library(sf)
 library(caret)
 
 # フォルダ内の全ての画像ファイルをリスト
-image_folder <- "F:/2024_hirora_Toyota5/tool/ArcGIS/fold_image6_val_134/640pix_output/640pix_0.5_common_Landsat5/"
+image_folder <- "G:/U-Net_Result/val_2000_2010_predict/val_Landsat5_2010/"
 image_files <- list.files(image_folder, pattern = "\\.tif$", full.names = TRUE)  # .tif ファイルを対象
 
+# 出力ファイルのパスを設定# 出力ファイルのパスを設定
+output_csv_path <- "G:/U-Net_Result/val_2000_2010_predict/val_Landsat5_2010/results_true.csv"  # 保存先を指定
+
 # ポリゴンファイルを読み込む
-polygon_shp_path <- "C:/Users/casakuma-lab-02-std/Downloads/Mining200_All.shp"
+polygon_shp_path <- "E:/2024_hirota/mining/polygon_Bare_2000-2010/polygon_Bare_2010.shp"
 polygons <- st_read(polygon_shp_path)
+# ★ この行を追加して、"Class" フィールドを作成し、値を1に設定する
+#polygons$Class <- 1
 # . ポリゴンの座標次元を修正（XYZ → XY）
 polygons <- st_zm(polygons, drop = TRUE, what = "ZM")
 
 
-# 結果を格納するデータフレームを作成
 results_all <- data.frame(
   Image = character(),
   Precision = numeric(),
   Recall = numeric(),
   F1_Score = numeric(),
+  FalseNegativeRate = numeric(), # この列を追加
+  FalsePositiveRate = numeric(), # この列を追加
   Reference_size = numeric(),
   stringsAsFactors = FALSE
 )
@@ -92,15 +99,15 @@ for (predict_image_path in image_files) {
   reference_size <- sum(reference == 1, na.rm = TRUE)
   
   # Precision と Recall を計算
-  precision_1 <- TP / (TP + FP)
-  recall_1 <- TP / (TP + FN)
+  precision_1 <- ifelse((TP + FP) > 0, TP / (TP + FP), 0)
+  recall_1 <- ifelse((TP + FN) > 0, TP / (TP + FN), 0)
   
-  # False Negative Rateと　False Positive Rate
-  FalseNegativeRate <- FN / (TP + FN)
-  FalsePositiveRate <- FP / (TN + FP)
+  # False Negative Rateと　False Positive Rate を安全に計算
+   FalseNegativeRate <- ifelse((TP + FN) > 0, FN / (TP + FN), 0)
+   FalsePositiveRate <- ifelse((TN + FP) > 0, FP / (TN + FP), 0)
   
   # F1-Score の計算
-  f1_score_1 <- 2 * (precision_1 * recall_1) / (precision_1 + recall_1)
+   f1_score_1 <- ifelse((precision_1 + recall_1) > 0, 2 * (precision_1 * recall_1) / (precision_1 + recall_1), 0)
   
   # 結果を出力
   cat("\nPrecision (Class 1):", precision_1, "\n")
@@ -122,9 +129,6 @@ for (predict_image_path in image_files) {
   # 結果を全ての結果データフレームに追加
   results_all <- rbind(results_all, results)
 }
-
-# 出力ファイルのパスを設定
-output_csv_path <- "F:/2024_hirora_Toyota5/tool/ArcGIS/fold_image6_val_134/640pix_output/640pix_0.5_common_Landsat5/results_true.csv"  # 保存先を指定
 
 # 結果をCSVファイルに書き込む
 write.csv(results_all, output_csv_path, row.names = FALSE)
