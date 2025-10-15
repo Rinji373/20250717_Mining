@@ -20,7 +20,7 @@ drive <- drive_find(pattern="*_epsg4326_scale500m_beech.tif")
 folder_name <- "Sentinel-2_Monthly_Best_Image_2021ver"
 
 # 鉱山ポリゴンの読み込み（SHAPE形式）
-polygon <- st_read(dsn="C:/Users/casakuma-lab-04-std/Downloads/Polygon_Bare_20250819_2021ver 1/Polygon_Bare_20250819_2021ver/polygon_bare20250819_2021ver_test.shp")
+polygon <- st_read(dsn="C:/Users/casakuma-lab-04-std/Downloads/Polygon_Bare_20250819_2021ver 1/Polygon_Bare_20250819_2021ver/polygon_bare20250819_2021ver_1001-2000.shp")
 #polygon <- st_read(dsn="C:/Users/casakuma-lab-04-std/Downloads/test.shp")
 
 ####################################################################
